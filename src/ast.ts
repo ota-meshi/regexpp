@@ -13,6 +13,7 @@ export type BranchNode =
     | CharacterClassRange
     | Group
     | LookaroundAssertion
+    | Modifiers
     | Pattern
     | Quantifier
     | RegExpLiteral
@@ -26,6 +27,7 @@ export type LeafNode =
     | Character
     | CharacterSet
     | Flags
+    | ModifierFlags
 
 /**
  * The type which includes all atom nodes.
@@ -105,6 +107,7 @@ export interface Alternative extends NodeBase {
 export interface Group extends NodeBase {
     type: "Group"
     parent: Alternative | Quantifier
+    modifiers: Modifiers | null
     alternatives: Alternative[]
 }
 
@@ -277,6 +280,27 @@ export interface Backreference extends NodeBase {
     parent: Alternative | Quantifier
     ref: number | string
     resolved: CapturingGroup
+}
+
+/**
+ * The modifiers.
+ */
+export interface Modifiers extends NodeBase {
+    type: "Modifiers"
+    parent: Group
+    add: ModifierFlags | null
+    remove: ModifierFlags | null
+}
+
+/**
+ * The modifier flags.
+ */
+export interface ModifierFlags extends NodeBase {
+    type: "ModifierFlags"
+    parent: Modifiers
+    dotAll: boolean
+    ignoreCase: boolean
+    multiline: boolean
 }
 
 /**

@@ -16,6 +16,7 @@ type FixtureData = Record<
                 | 2020
                 | 2021
                 | 2022
+                | 2023
         }
         patterns: Record<
             string,

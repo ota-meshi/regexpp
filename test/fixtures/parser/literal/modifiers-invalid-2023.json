@@ -1,0 +1,44 @@
+{
+  "options": {
+    "strict": false,
+    "ecmaVersion": 2023
+  },
+  "patterns": {
+    "/(?-:sub_expression)?/": {
+      "error": {
+        "message": "Invalid regular expression: /(?-:sub_expression)?/: Invalid empty flags",
+        "index": 4
+      }
+    },
+    "/(?unknown:sub_expression)?/": {
+      "error": {
+        "message": "Invalid regular expression: /(?unknown:sub_expression)?/: Invalid flag 'u'",
+        "index": 10
+      }
+    },
+    "/(?i-unknown:sub_expression)?/": {
+      "error": {
+        "message": "Invalid regular expression: /(?i-unknown:sub_expression)?/: Invalid flag 'u'",
+        "index": 12
+      }
+    },
+    "/(?ii:sub_expression)?/": {
+      "error": {
+        "message": "Invalid regular expression: /(?ii:sub_expression)?/: Duplicated flag 'i'",
+        "index": 5
+      }
+    },
+    "/(?-ii:sub_expression)?/": {
+      "error": {
+        "message": "Invalid regular expression: /(?-ii:sub_expression)?/: Duplicated flag 'i'",
+        "index": 6
+      }
+    },
+    "/(?i-i:sub_expression)?/": {
+      "error": {
+        "message": "Invalid regular expression: /(?i-i:sub_expression)?/: Duplicated flag 'i'",
+        "index": 6
+      }
+    }
+  }
+}

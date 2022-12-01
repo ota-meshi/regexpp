@@ -124,14 +124,4 @@ export class Reader {
         }
         return false
     }
-
-    public eat3(cp1: number, cp2: number, cp3: number): boolean {
-        if (this._cp1 === cp1 && this._cp2 === cp2 && this._cp3 === cp3) {
-            this.advance()
-            this.advance()
-            this.advance()
-            return true
-        }
-        return false
-    }
 }
