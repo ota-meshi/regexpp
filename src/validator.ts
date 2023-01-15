@@ -75,6 +75,13 @@ import {
     isValidUnicode,
 } from "./unicode"
 
+/**
+ * Checks whether the given character code point is a SyntaxCharacter
+ * ```
+ * SyntaxCharacter :: one of
+ *   ^ $ \ . * + ? ( ) [ ] { } |
+ * ```
+ */
 function isSyntaxCharacter(cp: number): boolean {
     return (
         cp === CIRCUMFLEX_ACCENT ||
@@ -94,15 +101,33 @@ function isSyntaxCharacter(cp: number): boolean {
     )
 }
 
-function isRegExpIdentifierStart(cp: number): boolean {
+/**
+ * Checks whether the given character code point is a IdentifierStartChar
+ * ```
+ * IdentifierStartChar ::
+ *     UnicodeIDStart
+ *     $
+ *     _
+ * ```
+ */
+function isIdentifierStartChar(cp: number): boolean {
     return isIdStart(cp) || cp === DOLLAR_SIGN || cp === LOW_LINE
 }
 
-function isRegExpIdentifierPart(cp: number): boolean {
+/**
+ * Checks whether the given character code point is a IdentifierPartChar
+ * ```
+ * IdentifierPartChar ::
+ *     UnicodeIDContinue
+ *     $
+ *     <ZWNJ>
+ *     <ZWJ>
+ * ```
+ */
+function isIdentifierPartChar(cp: number): boolean {
     return (
         isIdContinue(cp) ||
         cp === DOLLAR_SIGN ||
-        cp === LOW_LINE ||
         cp === ZERO_WIDTH_NON_JOINER ||
         cp === ZERO_WIDTH_JOINER
     )
@@ -417,7 +442,7 @@ export class RegExpValidator {
 
     private readonly _reader = new Reader()
 
-    private _uFlag = false
+    private _unicodeMode = false
 
     private _nFlag = false
 
@@ -460,7 +485,7 @@ export class RegExpValidator {
         start = 0,
         end: number = source.length,
     ): void {
-        this._uFlag = this._nFlag = false
+        this._unicodeMode = this._nFlag = false
         this.reset(source, start, end)
 
         this.onLiteralEnter(start)
@@ -561,7 +586,7 @@ export class RegExpValidator {
         end: number = source.length,
         uFlag = false,
     ): void {
-        this._uFlag = uFlag && this.ecmaVersion >= 2015
+        this._unicodeMode = uFlag && this.ecmaVersion >= 2015
         this._nFlag = uFlag && this.ecmaVersion >= 2018
         this.reset(source, start, end)
         this.consumePattern()
@@ -580,7 +605,7 @@ export class RegExpValidator {
     // #region Delegate for Options
 
     private get strict() {
-        return Boolean(this._options.strict) || this._uFlag
+        return Boolean(this._options.strict) || this._unicodeMode
     }
 
     private get ecmaVersion() {
@@ -856,7 +881,7 @@ export class RegExpValidator {
     }
 
     private reset(source: string, start: number, end: number): void {
-        this._reader.reset(source, start, end, this._uFlag)
+        this._reader.reset(source, start, end, this._unicodeMode)
     }
 
     private rewind(index: number): void {
@@ -884,13 +909,13 @@ export class RegExpValidator {
     private raise(message: string): never {
         throw new RegExpSyntaxError(
             this.source,
-            this._uFlag,
+            this._unicodeMode,
             this.index,
             message,
         )
     }
 
-    // https://www.ecma-international.org/ecma-262/8.0/#prod-RegularExpressionBody
+    // https://tc39.es/ecma262/2022/multipage/ecmascript-language-lexical-grammar.html#prod-RegularExpressionBody
     private eatRegExpBody(): boolean {
         const start = this.index
         let inClass = false
@@ -925,8 +950,8 @@ export class RegExpValidator {
     /**
      * Validate the next characters as a RegExp `Pattern` production.
      * ```
-     * Pattern[U, N]::
-     *      Disjunction[?U, ?N]
+     * Pattern[UnicodeMode, N]::
+     *      Disjunction[?UnicodeMode, ?N]
      * ```
      */
     private consumePattern(): void {
@@ -1000,9 +1025,9 @@ export class RegExpValidator {
     /**
      * Validate the next characters as a RegExp `Disjunction` production.
      * ```
-     * Disjunction[U, N]::
-     *      Alternative[?U, ?N]
-     *      Alternative[?U, ?N] `|` Disjunction[?U, ?N]
+     * Disjunction[UnicodeMode, N]::
+     *      Alternative[?UnicodeMode, ?N]
+     *      Alternative[?UnicodeMode, ?N] `|` Disjunction[?UnicodeMode, ?N]
      * ```
      */
     private consumeDisjunction(): void {
@@ -1026,9 +1051,9 @@ export class RegExpValidator {
     /**
      * Validate the next characters as a RegExp `Alternative` production.
      * ```
-     * Alternative[U, N]::
-     *      ε
-     *      Alternative[?U, ?N] Term[?U, ?N]
+     * Alternative[UnicodeMode, N]::
+     *      [empty]
+     *      Alternative[?UnicodeMode, ?N] Term[?UnicodeMode, ?N]
      * ```
      */
     private consumeAlternative(i: number): void {
@@ -1044,22 +1069,22 @@ export class RegExpValidator {
     /**
      * Validate the next characters as a RegExp `Term` production if possible.
      * ```
-     * Term[U, N]::
-     *      [strict] Assertion[+U, ?N]
-     *      [strict] Atom[+U, ?N]
-     *      [strict] Atom[+U, ?N] Quantifier
-     *      [annexB][+U] Assertion[+U, ?N]
-     *      [annexB][+U] Atom[+U, ?N]
-     *      [annexB][+U] Atom[+U, ?N] Quantifier
-     *      [annexB][~U] QuantifiableAssertion[?N] Quantifier
-     *      [annexB][~U] Assertion[~U, ?N]
-     *      [annexB][~U] ExtendedAtom[?N] Quantifier
-     *      [annexB][~U] ExtendedAtom[?N]
+     * Term[UnicodeMode, N]::
+     *      [strict] Assertion[+UnicodeMode, ?N]
+     *      [strict] Atom[+UnicodeMode, ?N]
+     *      [strict] Atom[+UnicodeMode, ?N] Quantifier
+     *      [annexB][+UnicodeMode] Assertion[+UnicodeMode, ?N]
+     *      [annexB][+UnicodeMode] Atom[+UnicodeMode, ?N]
+     *      [annexB][+UnicodeMode] Atom[+UnicodeMode, ?N] Quantifier
+     *      [annexB][~UnicodeMode] QuantifiableAssertion[?N] Quantifier
+     *      [annexB][~UnicodeMode] Assertion[~UnicodeMode, ?N]
+     *      [annexB][~UnicodeMode] ExtendedAtom[?N] Quantifier
+     *      [annexB][~UnicodeMode] ExtendedAtom[?N]
      * ```
      * @returns `true` if it consumed the next characters successfully.
      */
     private consumeTerm(): boolean {
-        if (this._uFlag || this.strict) {
+        if (this._unicodeMode || this.strict) {
             return (
                 this.consumeAssertion() ||
                 (this.consumeAtom() && this.consumeOptionalQuantifier())
@@ -1083,21 +1108,21 @@ export class RegExpValidator {
      * Set `this._lastAssertionIsQuantifiable` if the consumed assertion was a
      * `QuantifiableAssertion` production.
      * ```
-     * Assertion[U, N]::
+     * Assertion[UnicodeMode, N]::
      *      `^`
      *      `$`
      *      `\b`
      *      `\B`
-     *      [strict] `(?=` Disjunction[+U, ?N] `)`
-     *      [strict] `(?!` Disjunction[+U, ?N] `)`
-     *      [annexB][+U] `(?=` Disjunction[+U, ?N] `)`
-     *      [annexB][+U] `(?!` Disjunction[+U, ?N] `)`
-     *      [annexB][~U] QuantifiableAssertion[?N]
-     *      `(?<=` Disjunction[?U, ?N] `)`
-     *      `(?<!` Disjunction[?U, ?N] `)`
+     *      [strict] `(?=` Disjunction[+UnicodeMode, ?N] `)`
+     *      [strict] `(?!` Disjunction[+UnicodeMode, ?N] `)`
+     *      [annexB][+UnicodeMode] `(?=` Disjunction[+UnicodeMode, ?N] `)`
+     *      [annexB][+UnicodeMode] `(?!` Disjunction[+UnicodeMode, ?N] `)`
+     *      [annexB][~UnicodeMode] QuantifiableAssertion[?N]
+     *      `(?<=` Disjunction[?UnicodeMode, ?N] `)`
+     *      `(?<!` Disjunction[?UnicodeMode, ?N] `)`
      * QuantifiableAssertion[N]::
-     *      `(?=` Disjunction[~U, ?N] `)`
-     *      `(?!` Disjunction[~U, ?N] `)`
+     *      `(?=` Disjunction[~UnicodeMode, ?N] `)`
+     *      `(?!` Disjunction[~UnicodeMode, ?N] `)`
      * ```
      * @returns `true` if it consumed the next characters successfully.
      */
@@ -1227,7 +1252,7 @@ export class RegExpValidator {
                     return true
                 }
             }
-            if (!noError && (this._uFlag || this.strict)) {
+            if (!noError && (this._unicodeMode || this.strict)) {
                 this.raise("Incomplete quantifier")
             }
             this.rewind(start)
@@ -1238,13 +1263,13 @@ export class RegExpValidator {
     /**
      * Validate the next characters as a RegExp `Atom` production if possible.
      * ```
-     * Atom[U, N]::
+     * Atom[UnicodeMode, N]::
      *      PatternCharacter
      *      `.`
-     *      `\\` AtomEscape[?U, ?N]
-     *      CharacterClass[?U]
-     *      `(?:` Disjunction[?U, ?N] )
-     *      `(` GroupSpecifier[?U] Disjunction[?U, ?N] `)`
+     *      `\\` AtomEscape[?UnicodeMode, ?N]
+     *      CharacterClass[?UnicodeMode]
+     *      `(` GroupSpecifier[?UnicodeMode]opt Disjunction[?UnicodeMode, ?N] `)`
+     *      `(?:` Disjunction[?UnicodeMode, ?N] `)`
      * ```
      * @returns `true` if it consumed the next characters successfully.
      */
@@ -1277,7 +1302,7 @@ export class RegExpValidator {
     /**
      * Validate the next characters as the following alternatives if possible.
      * ```
-     *      `\\` AtomEscape[?U, ?N]
+     *      `\\` AtomEscape[?UnicodeMode, ?N]
      * ```
      * @returns `true` if it consumed the next characters successfully.
      */
@@ -1295,7 +1320,7 @@ export class RegExpValidator {
     /**
      * Validate the next characters as the following alternatives if possible.
      * ```
-     *      `(?:` Disjunction[?U, ?N] )
+     *      `(?:` Disjunction[?UnicodeMode, ?N] `)`
      * ```
      * @returns `true` if it consumed the next characters successfully.
      */
@@ -1316,7 +1341,7 @@ export class RegExpValidator {
     /**
      * Validate the next characters as the following alternatives if possible.
      * ```
-     *      `(` GroupSpecifier[?U] Disjunction[?U, ?N] `)`
+     *      `(` GroupSpecifier[?UnicodeMode]opt Disjunction[?UnicodeMode, ?N] `)`
      * ```
      * @returns `true` if it consumed the next characters successfully.
      */
@@ -1350,11 +1375,11 @@ export class RegExpValidator {
      * ```
      * ExtendedAtom[N]::
      *      `.`
-     *      `\` AtomEscape[~U, ?N]
+     *      `\` AtomEscape[~UnicodeMode, ?N]
      *      `\` [lookahead = c]
-     *      CharacterClass[~U]
-     *      `(?:` Disjunction[~U, ?N] `)`
-     *      `(` Disjunction[~U, ?N] `)`
+     *      CharacterClass[~UnicodeMode]
+     *      `(` GroupSpecifier[~UnicodeMode]opt Disjunction[~UnicodeMode, ?N] `)`
+     *      `(?:` Disjunction[~UnicodeMode, ?N] `)`
      *      InvalidBracedQuantifier
      *      ExtendedPatternCharacter
      * ```
@@ -1469,9 +1494,9 @@ export class RegExpValidator {
      * Validate the next characters as a RegExp `GroupSpecifier` production.
      * Set `this._lastStrValue` if the group name existed.
      * ```
-     * GroupSpecifier[U]::
-     *      ε
-     *      `?` GroupName[?U]
+     * GroupSpecifier[UnicodeMode]::
+     *      [empty]
+     *      `?` GroupName[?UnicodeMode]
      * ```
      * @returns `true` if the group name existed.
      */
@@ -1493,14 +1518,14 @@ export class RegExpValidator {
      * Validate the next characters as a RegExp `AtomEscape` production if
      * possible.
      * ```
-     * AtomEscape[U, N]::
+     * AtomEscape[UnicodeMode, N]::
      *      [strict] DecimalEscape
-     *      [annexB][+U] DecimalEscape
-     *      [annexB][~U] DecimalEscape but only if the CapturingGroupNumber of DecimalEscape is <= NcapturingParens
-     *      CharacterClassEscape[?U]
-     *      [strict] CharacterEscape[?U]
-     *      [annexB] CharacterEscape[?U, ?N]
-     *      [+N] `k` GroupName[?U]
+     *      [annexB][+UnicodeMode] DecimalEscape
+     *      [annexB][~UnicodeMode] DecimalEscape but only if the CapturingGroupNumber of DecimalEscape is <= NcapturingParens
+     *      CharacterClassEscape[?UnicodeMode]
+     *      [strict] CharacterEscape[?UnicodeMode]
+     *      [annexB] CharacterEscape[?UnicodeMode, ?N]
+     *      [+N] `k` GroupName[?UnicodeMode]
      * ```
      * @returns `true` if it consumed the next characters successfully.
      */
@@ -1513,18 +1538,18 @@ export class RegExpValidator {
         ) {
             return true
         }
-        if (this.strict || this._uFlag) {
+        if (this.strict || this._unicodeMode) {
             this.raise("Invalid escape")
         }
         return false
     }
 
     /**
-     * Validate the next characters as the follwoing alternatives if possible.
+     * Validate the next characters as the following alternatives if possible.
      * ```
      *      [strict] DecimalEscape
-     *      [annexB][+U] DecimalEscape
-     *      [annexB][~U] DecimalEscape but only if the CapturingGroupNumber of DecimalEscape is <= NcapturingParens
+     *      [annexB][+UnicodeMode] DecimalEscape
+     *      [annexB][~UnicodeMode] DecimalEscape but only if the CapturingGroupNumber of DecimalEscape is <= NcapturingParens
      * ```
      * @returns `true` if it consumed the next characters successfully.
      */
@@ -1536,7 +1561,7 @@ export class RegExpValidator {
                 this.onBackreference(start - 1, this.index, n)
                 return true
             }
-            if (this.strict || this._uFlag) {
+            if (this.strict || this._unicodeMode) {
                 this.raise("Invalid escape")
             }
             this.rewind(start)
@@ -1550,15 +1575,15 @@ export class RegExpValidator {
      * Set `-1` to `this._lastIntValue` as meaning of a character set if it ate
      * the next characters successfully.
      * ```
-     * CharacterClassEscape[U]::
+     * CharacterClassEscape[UnicodeMode]::
      *      `d`
      *      `D`
      *      `s`
      *      `S`
      *      `w`
      *      `W`
-     *      [+U] `p{` UnicodePropertyValueExpression `}`
-     *      [+U] `P{` UnicodePropertyValueExpression `}`
+     *      [+UnicodeMode] `p{` UnicodePropertyValueExpression `}`
+     *      [+UnicodeMode] `P{` UnicodePropertyValueExpression `}`
      * ```
      * @returns `true` if it consumed the next characters successfully.
      */
@@ -1598,7 +1623,7 @@ export class RegExpValidator {
 
         let negate = false
         if (
-            this._uFlag &&
+            this._unicodeMode &&
             this.ecmaVersion >= 2018 &&
             (this.eat(LATIN_SMALL_LETTER_P) ||
                 (negate = this.eat(LATIN_CAPITAL_LETTER_P)))
@@ -1629,14 +1654,14 @@ export class RegExpValidator {
      * Validate the next characters as a RegExp `CharacterEscape` production if
      * possible.
      * ```
-     * CharacterEscape[U, N]::
+     * CharacterEscape[UnicodeMode, N]::
      *      ControlEscape
      *      `c` ControlLetter
      *      `0` [lookahead ∉ DecimalDigit]
      *      HexEscapeSequence
-     *      RegExpUnicodeEscapeSequence[?U]
-     *      [annexB][~U] LegacyOctalEscapeSequence
-     *      IdentityEscape[?U, ?N]
+     *      RegExpUnicodeEscapeSequence[?UnicodeMode]
+     *      [annexB][~UnicodeMode] LegacyOctalEscapeSequence
+     *      IdentityEscape[?UnicodeMode, ?N]
      * ```
      * @returns `true` if it consumed the next characters successfully.
      */
@@ -1649,7 +1674,7 @@ export class RegExpValidator {
             this.eatHexEscapeSequence() ||
             this.eatRegExpUnicodeEscapeSequence() ||
             (!this.strict &&
-                !this._uFlag &&
+                !this._unicodeMode &&
                 this.eatLegacyOctalEscapeSequence()) ||
             this.eatIdentityEscape()
         ) {
@@ -1660,9 +1685,9 @@ export class RegExpValidator {
     }
 
     /**
-     * Validate the next characters as the follwoing alternatives if possible.
+     * Validate the next characters as the following alternatives if possible.
      * ```
-     *      `k` GroupName[?U]
+     *      `k` GroupName[?UnicodeMode]
      * ```
      * @returns `true` if it consumed the next characters successfully.
      */
@@ -1684,9 +1709,9 @@ export class RegExpValidator {
      * Validate the next characters as a RegExp `CharacterClass` production if
      * possible.
      * ```
-     * CharacterClass[U]::
-     *      `[` [lookahead ≠ ^] ClassRanges[?U] `]`
-     *      `[^` ClassRanges[?U] `]`
+     * CharacterClass[UnicodeMode]::
+     *      `[` [lookahead ≠ ^] ClassRanges[?UnicodeMode] `]`
+     *      `[^` ClassRanges[?UnicodeMode] `]`
      * ```
      * @returns `true` if it consumed the next characters successfully.
      */
@@ -1708,21 +1733,21 @@ export class RegExpValidator {
     /**
      * Validate the next characters as a RegExp `ClassRanges` production.
      * ```
-     * ClassRanges[U]::
-     *      ε
-     *      NonemptyClassRanges[?U]
-     * NonemptyClassRanges[U]::
-     *      ClassAtom[?U]
-     *      ClassAtom[?U] NonemptyClassRangesNoDash[?U]
-     *      ClassAtom[?U] `-` ClassAtom[?U] ClassRanges[?U]
-     * NonemptyClassRangesNoDash[U]::
-     *      ClassAtom[?U]
-     *      ClassAtomNoDash[?U] NonemptyClassRangesNoDash[?U]
-     *      ClassAtomNoDash[?U] `-` ClassAtom[?U] ClassRanges[?U]
+     * ClassRanges[UnicodeMode]::
+     *      [empty]
+     *      NonemptyClassRanges[?UnicodeMode]
+     * NonemptyClassRanges[UnicodeMode]::
+     *      ClassAtom[?UnicodeMode]
+     *      ClassAtom[?UnicodeMode] NonemptyClassRangesNoDash[?UnicodeMode]
+     *      ClassAtom[?UnicodeMode] `-` ClassAtom[?UnicodeMode] ClassRanges[?UnicodeMode]
+     * NonemptyClassRangesNoDash[UnicodeMode]::
+     *      ClassAtom[?UnicodeMode]
+     *      ClassAtomNoDash[?UnicodeMode] NonemptyClassRangesNoDash[?UnicodeMode]
+     *      ClassAtomNoDash[?UnicodeMode] `-` ClassAtom[?UnicodeMode] ClassRanges[?UnicodeMode]
      * ```
      */
     private consumeClassRanges(): void {
-        const strict = this.strict || this._uFlag
+        const strict = this.strict || this._unicodeMode
         for (;;) {
             // Consume the first ClassAtom
             const rangeStart = this.index
@@ -1763,12 +1788,12 @@ export class RegExpValidator {
      * possible.
      * Set `this._lastIntValue` if it consumed the next characters successfully.
      * ```
-     * ClassAtom[U, N]::
+     * ClassAtom[UnicodeMode, N]::
      *      `-`
-     *      ClassAtomNoDash[?U, ?N]
-     * ClassAtomNoDash[U, N]::
+     *      ClassAtomNoDash[?UnicodeMode, ?N]
+     * ClassAtomNoDash[UnicodeMode, N]::
      *      SourceCharacter but not one of \ ] -
-     *      `\` ClassEscape[?U, ?N]
+     *      `\` ClassEscape[?UnicodeMode, ?N]
      *      [annexB] `\` [lookahead = c]
      * ```
      * @returns `true` if it consumed the next characters successfully.
@@ -1800,7 +1825,7 @@ export class RegExpValidator {
                 this.onCharacter(start, this.index, this._lastIntValue)
                 return true
             }
-            if (this.strict || this._uFlag) {
+            if (this.strict || this._unicodeMode) {
                 this.raise("Invalid escape")
             }
             this.rewind(start)
@@ -1814,12 +1839,12 @@ export class RegExpValidator {
      * possible.
      * Set `this._lastIntValue` if it consumed the next characters successfully.
      * ```
-     * ClassEscape[U, N]::
+     * ClassEscape[UnicodeMode, N]::
      *      `b`
-     *      [+U] `-`
-     *      [annexB][~U] `c` ClassControlLetter
-     *      CharacterClassEscape[?U]
-     *      CharacterEscape[?U, ?N]
+     *      [+UnicodeMode] `-`
+     *      [annexB][~UnicodeMode] `c` ClassControlLetter
+     *      CharacterClassEscape[?UnicodeMode]
+     *      CharacterEscape[?UnicodeMode, ?N]
      * ClassControlLetter::
      *      DecimalDigit
      *      `_`
@@ -1836,18 +1861,18 @@ export class RegExpValidator {
             return true
         }
 
-        // [+U] `-`
-        if (this._uFlag && this.eat(HYPHEN_MINUS)) {
+        // [+UnicodeMode] `-`
+        if (this._unicodeMode && this.eat(HYPHEN_MINUS)) {
             this._lastIntValue = HYPHEN_MINUS
             this.onCharacter(start - 1, this.index, this._lastIntValue)
             return true
         }
 
-        // [annexB][~U] `c` ClassControlLetter
+        // [annexB][~UnicodeMode] `c` ClassControlLetter
         let cp = 0
         if (
             !this.strict &&
-            !this._uFlag &&
+            !this._unicodeMode &&
             this.currentCodePoint === LATIN_SMALL_LETTER_C &&
             (isDecimalDigit((cp = this.nextCodePoint)) || cp === LOW_LINE)
         ) {
@@ -1867,8 +1892,8 @@ export class RegExpValidator {
      * Eat the next characters as a RegExp `GroupName` production if possible.
      * Set `this._lastStrValue` if the group name existed.
      * ```
-     * GroupName[U]::
-     *      `<` RegExpIdentifierName[?U] `>`
+     * GroupName[UnicodeMode]::
+     *      `<` RegExpIdentifierName[?UnicodeMode] `>`
      * ```
      * @returns `true` if it ate the next characters successfully.
      */
@@ -1887,9 +1912,9 @@ export class RegExpValidator {
      * possible.
      * Set `this._lastStrValue` if the identifier name existed.
      * ```
-     * RegExpIdentifierName[U]::
-     *      RegExpIdentifierStart[?U]
-     *      RegExpIdentifierName[?U] RegExpIdentifierPart[?U]
+     * RegExpIdentifierName[UnicodeMode]::
+     *      RegExpIdentifierStart[?UnicodeMode]
+     *      RegExpIdentifierName[?UnicodeMode] RegExpIdentifierPart[?UnicodeMode]
      * ```
      * @returns `true` if it ate the next characters successfully.
      */
@@ -1909,18 +1934,16 @@ export class RegExpValidator {
      * possible.
      * Set `this._lastIntValue` if the identifier start existed.
      * ```
-     * RegExpIdentifierStart[U] ::
-     *      UnicodeIDStart
-     *      `$`
-     *      `_`
-     *      `\` RegExpUnicodeEscapeSequence[+U]
-     *      [~U] UnicodeLeadSurrogate UnicodeTrailSurrogate
+     * RegExpIdentifierStart[UnicodeMode] ::
+     *      IdentifierStartChar
+     *      `\` RegExpUnicodeEscapeSequence[+UnicodeMode]
+     *      [~UnicodeMode] UnicodeLeadSurrogate UnicodeTrailSurrogate
      * ```
      * @returns `true` if it ate the next characters successfully.
      */
     private eatRegExpIdentifierStart(): boolean {
         const start = this.index
-        const forceUFlag = !this._uFlag && this.ecmaVersion >= 2020
+        const forceUFlag = !this._unicodeMode && this.ecmaVersion >= 2020
         let cp = this.currentCodePoint
         this.advance()
 
@@ -1938,7 +1961,7 @@ export class RegExpValidator {
             this.advance()
         }
 
-        if (isRegExpIdentifierStart(cp)) {
+        if (isIdentifierStartChar(cp)) {
             this._lastIntValue = cp
             return true
         }
@@ -1954,20 +1977,16 @@ export class RegExpValidator {
      * possible.
      * Set `this._lastIntValue` if the identifier part existed.
      * ```
-     * RegExpIdentifierPart[U] ::
-     *      UnicodeIDContinue
-     *      `$`
-     *      `_`
-     *      `\` RegExpUnicodeEscapeSequence[+U]
-     *      [~U] UnicodeLeadSurrogate UnicodeTrailSurrogate
-     *      <ZWNJ>
-     *      <ZWJ>
+     * RegExpIdentifierPart[UnicodeMode] ::
+     *      IdentifierPartChar
+     *      `\` RegExpUnicodeEscapeSequence[+UnicodeMode]
+     *      [~UnicodeMode] UnicodeLeadSurrogate UnicodeTrailSurrogate
      * ```
      * @returns `true` if it ate the next characters successfully.
      */
     private eatRegExpIdentifierPart(): boolean {
         const start = this.index
-        const forceUFlag = !this._uFlag && this.ecmaVersion >= 2020
+        const forceUFlag = !this._unicodeMode && this.ecmaVersion >= 2020
         let cp = this.currentCodePoint
         this.advance()
 
@@ -1985,7 +2004,7 @@ export class RegExpValidator {
             this.advance()
         }
 
-        if (isRegExpIdentifierPart(cp)) {
+        if (isIdentifierPartChar(cp)) {
             this._lastIntValue = cp
             return true
         }
@@ -1997,7 +2016,7 @@ export class RegExpValidator {
     }
 
     /**
-     * Eat the next characters as the follwoing alternatives if possible.
+     * Eat the next characters as the following alternatives if possible.
      * Set `this._lastIntValue` if it ate the next characters successfully.
      * ```
      *      `c` ControlLetter
@@ -2016,7 +2035,7 @@ export class RegExpValidator {
     }
 
     /**
-     * Eat the next characters as the follwoing alternatives if possible.
+     * Eat the next characters as the following alternatives if possible.
      * Set `this._lastIntValue` if it ate the next characters successfully.
      * ```
      *      `0` [lookahead ∉ DecimalDigit]
@@ -2095,19 +2114,19 @@ export class RegExpValidator {
      * production if possible.
      * Set `this._lastIntValue` if it ate the next characters successfully.
      * ```
-     * RegExpUnicodeEscapeSequence[U]::
-     *      [+U] `u` LeadSurrogate `\u` TrailSurrogate
-     *      [+U] `u` LeadSurrogate
-     *      [+U] `u` TrailSurrogate
-     *      [+U] `u` NonSurrogate
-     *      [~U] `u` Hex4Digits
-     *      [+U] `u{` CodePoint `}`
+     * RegExpUnicodeEscapeSequence[UnicodeMode]::
+     *      [+UnicodeMode] `u` LeadSurrogate `\u` TrailSurrogate
+     *      [+UnicodeMode] `u` LeadSurrogate
+     *      [+UnicodeMode] `u` TrailSurrogate
+     *      [+UnicodeMode] `u` NonSurrogate
+     *      [~UnicodeMode] `u` Hex4Digits
+     *      [+UnicodeMode] `u{` CodePoint `}`
      * ```
      * @returns `true` if it ate the next characters successfully.
      */
     private eatRegExpUnicodeEscapeSequence(forceUFlag = false): boolean {
         const start = this.index
-        const uFlag = forceUFlag || this._uFlag
+        const uFlag = forceUFlag || this._unicodeMode
 
         if (this.eat(LATIN_SMALL_LETTER_U)) {
             if (
@@ -2187,11 +2206,11 @@ export class RegExpValidator {
      * possible.
      * Set `this._lastIntValue` if it ate the next characters successfully.
      * ```
-     * IdentityEscape[U, N]::
-     *      [+U] SyntaxCharacter
-     *      [+U] `/`
-     *      [strict][~U] SourceCharacter but not UnicodeIDContinue
-     *      [annexB][~U] SourceCharacterIdentityEscape[?N]
+     * IdentityEscape[UnicodeMode, N]::
+     *      [+UnicodeMode] SyntaxCharacter
+     *      [+UnicodeMode] `/`
+     *      [strict][~UnicodeMode] SourceCharacter but not UnicodeIDContinue
+     *      [annexB][~UnicodeMode] SourceCharacterIdentityEscape[?N]
      * SourceCharacterIdentityEscape[N]::
      *      [~N] SourceCharacter but not c
      *      [+N] SourceCharacter but not one of c k
@@ -2212,7 +2231,7 @@ export class RegExpValidator {
         if (cp === -1) {
             return false
         }
-        if (this._uFlag) {
+        if (this._unicodeMode) {
             return isSyntaxCharacter(cp) || cp === SOLIDUS
         }
         if (this.strict) {
@@ -2377,7 +2396,7 @@ export class RegExpValidator {
             if (this.eatFixedHexDigits(2)) {
                 return true
             }
-            if (this._uFlag || this.strict) {
+            if (this._unicodeMode || this.strict) {
                 this.raise("Invalid escape")
             }
             this.rewind(start)

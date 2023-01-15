@@ -66,9 +66,9 @@ export class Reader {
         source: string,
         start: number,
         end: number,
-        uFlag: boolean,
+        unicodeMode: boolean,
     ): void {
-        this._impl = uFlag ? unicodeImpl : legacyImpl
+        this._impl = unicodeMode ? unicodeImpl : legacyImpl
         this._s = source
         this._end = end
         this.rewind(start)
